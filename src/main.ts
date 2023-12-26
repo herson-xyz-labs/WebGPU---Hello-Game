@@ -1,24 +1,49 @@
-import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
+class Renderer
+{
+  private context!: GPUCanvasContext;
+  private device!: GPUDevice;
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <div>
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>Vite + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
-  </div>
-`
+  public async initialize()
+  {
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    this.context = canvas.getContext('webgpu')!;
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+    if(!this.context){
+      console.log('WebGPU not supported');
+      return;
+    }
+
+    const adapter = await navigator.gpu.requestAdapter({
+      powerPreference: 'low-power',
+    });
+
+    if (!adapter) {
+      console.log('No adapter found');
+      return;
+    }
+
+    this.device = await adapter.requestDevice();
+
+    this.context.configure({
+      device: this.device,
+      format: navigator.gpu.getPreferredCanvasFormat(),
+    });
+
+  }
+
+  public logDeviceInfo()
+  {
+    console.log(this.device);
+  }
+
+  public draw()
+  {
+
+  }
+}
+
+const renderer = new Renderer();
+renderer.initialize()
+        .then(() => 
+          renderer.logDeviceInfo()
+        );
