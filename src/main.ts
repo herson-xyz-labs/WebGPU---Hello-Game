@@ -31,19 +31,30 @@ class Renderer
 
   }
 
-  public logDeviceInfo()
-  {
-    console.log(this.device);
-  }
-
   public draw()
   {
+    const commandEncoder = this.device.createCommandEncoder();
+    const textureView = this.context.getCurrentTexture().createView();
 
+    const renderPassDescriptor: GPURenderPassDescriptor = {
+      colorAttachments: [{
+        view: textureView,
+        clearValue: { r: 1.0, g: 0.0, b: 0.0, a: 1.0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    };
+
+    const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+
+    passEncoder.end();
+
+    this.device.queue.submit([commandEncoder.finish()]);
   }
 }
 
 const renderer = new Renderer();
 renderer.initialize()
         .then(() => 
-          renderer.logDeviceInfo()
+          renderer.draw()
         );
