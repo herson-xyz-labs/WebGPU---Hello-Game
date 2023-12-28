@@ -5,6 +5,8 @@ class Renderer
   private context!: GPUCanvasContext;
   private device!: GPUDevice;
   private pipeline!: GPURenderPipeline;
+  private positionBuffer!: GPUBuffer;
+  private colorsBuffer!: GPUBuffer;
 
   public async initialize()
   {
@@ -34,6 +36,40 @@ class Renderer
 
     this.prepareModel();
 
+    this.positionBuffer = this.createBuffer(new Float32Array([
+      -0.5, -0.5,
+      0.5,  -0.5,
+      -0.5,  0.5,
+
+      -0.5,  0.5,
+      0.5,   0.5,
+      0.5, -0.5
+    ]));
+
+    this.colorsBuffer = this.createBuffer(new Float32Array([
+      1.0, 0.0, 1.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0,
+
+      0.0, 0.0, 1.0,
+      1.0, 0.0, 1.0,
+      0.0, 1.0, 0.0
+    ]));
+
+  }
+
+  private createBuffer(data: Float32Array) : GPUBuffer
+  {
+    const buffer = this.device.createBuffer({
+      size: data.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true,
+    });
+
+    new Float32Array(buffer.getMappedRange()).set(data);
+    buffer.unmap();
+
+    return buffer;
   }
 
   private prepareModel()
@@ -42,10 +78,34 @@ class Renderer
       code: shaderSource,
     });
 
+    const positionBufferLayout : GPUVertexBufferLayout = {
+      arrayStride: 2 * Float32Array.BYTES_PER_ELEMENT,
+      attributes: [
+        {
+          shaderLocation: 0,
+          offset: 0,
+          format: 'float32x2',
+        }
+      ],
+      stepMode: 'vertex',
+    };
+
+    const colorBufferLayout : GPUVertexBufferLayout = {
+      arrayStride: 3 * Float32Array.BYTES_PER_ELEMENT,
+      attributes: [
+        {
+          shaderLocation: 1,
+          offset: 0,
+          format: 'float32x3',
+        }
+      ],
+      stepMode: 'vertex',
+    };
+
     const vertexState: GPUVertexState = {
       module: shaderModule,
       entryPoint: 'vertexMain',
-      buffers: [],
+      buffers: [ positionBufferLayout, colorBufferLayout ],
     };
 
     const fragmentState: GPUFragmentState = {
@@ -77,7 +137,7 @@ class Renderer
     const renderPassDescriptor: GPURenderPassDescriptor = {
       colorAttachments: [{
         view: textureView,
-        clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        clearValue: { r: 0.8, g: 0.8, b: 0.8, a: 1.0 },
         loadOp: 'clear',
         storeOp: 'store',
       }],
@@ -86,8 +146,9 @@ class Renderer
     const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
 
     passEncoder.setPipeline(this.pipeline);
-    passEncoder.draw(3);
-
+    passEncoder.setVertexBuffer(0, this.positionBuffer);
+    passEncoder.setVertexBuffer(1, this.colorsBuffer);
+    passEncoder.draw(6);
     passEncoder.end();
 
     this.device.queue.submit([commandEncoder.finish()]);
