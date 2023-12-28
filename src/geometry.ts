@@ -37,4 +37,8 @@ export class QuadGeometry {
         ];
 
     }
+<<<<<<< HEAD
 } 
+=======
+}
+>>>>>>> fix-1
