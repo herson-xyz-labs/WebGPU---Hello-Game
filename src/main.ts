@@ -1,4 +1,6 @@
 import shaderSource from './shaders/shader.wgsl?raw';
+import { QuadGeometry } from './geometry';
+import { Texture } from './texture';
 
 class Renderer
 {
@@ -7,6 +9,9 @@ class Renderer
   private pipeline!: GPURenderPipeline;
   private positionBuffer!: GPUBuffer;
   private colorsBuffer!: GPUBuffer;
+  private texCoordsBuffer!: GPUBuffer;
+  private testTexture!: Texture;
+  private textureBindGroup!: GPUBindGroup;
 
   public async initialize()
   {
@@ -34,27 +39,14 @@ class Renderer
       format: navigator.gpu.getPreferredCanvasFormat(),
     });
 
+    this.testTexture = await Texture.createTextureFromURL(this.device, '/assets/albedo.jpg');
     this.prepareModel();
 
-    this.positionBuffer = this.createBuffer(new Float32Array([
-      -0.5, -0.5,
-      0.5,  -0.5,
-      -0.5,  0.5,
+    const geometry = new QuadGeometry();
 
-      -0.5,  0.5,
-      0.5,   0.5,
-      0.5, -0.5
-    ]));
-
-    this.colorsBuffer = this.createBuffer(new Float32Array([
-      1.0, 0.0, 1.0,
-      0.0, 1.0, 0.0,
-      0.0, 0.0, 1.0,
-
-      0.0, 0.0, 1.0,
-      1.0, 0.0, 1.0,
-      0.0, 1.0, 0.0
-    ]));
+    this.positionBuffer = this.createBuffer(new Float32Array(geometry.positions));
+    this.colorsBuffer = this.createBuffer(new Float32Array(geometry.colors));
+    this.texCoordsBuffer = this.createBuffer(new Float32Array(geometry.texCoords));
 
   }
 
@@ -102,10 +94,22 @@ class Renderer
       stepMode: 'vertex',
     };
 
+    const texCoordsBufferLayout : GPUVertexBufferLayout = {
+      arrayStride: 2 * Float32Array.BYTES_PER_ELEMENT,
+      attributes: [
+        {
+          shaderLocation: 2,
+          offset: 0,
+          format: 'float32x2',
+        }
+      ],
+      stepMode: 'vertex',
+    };
+
     const vertexState: GPUVertexState = {
       module: shaderModule,
       entryPoint: 'vertexMain',
-      buffers: [ positionBufferLayout, colorBufferLayout ],
+      buffers: [ positionBufferLayout, colorBufferLayout, texCoordsBufferLayout ],
     };
 
     const fragmentState: GPUFragmentState = {
@@ -114,9 +118,54 @@ class Renderer
       targets: [
         {
           format: navigator.gpu.getPreferredCanvasFormat(),
+          blend: {
+            color: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+            alpha: {
+              srcFactor: 'one',
+              dstFactor: 'one-minus-src-alpha',
+              operation: 'add',
+            },
+          },
         },
       ],
     };
+
+    const textureBindGroupLayout = this.device.createBindGroupLayout({
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: {},
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: {},
+        },
+      ],
+    });
+
+    const pipelineLayout = this.device.createPipelineLayout({
+      bindGroupLayouts: [textureBindGroupLayout],
+    });
+
+    this.textureBindGroup = this.device.createBindGroup({
+      layout: textureBindGroupLayout,
+      entries: [
+        {
+          binding: 0,
+          resource: this.testTexture.sampler,
+        },
+        {
+          binding: 1,
+          resource: this.testTexture.texture.createView(),
+        },
+      ],
+    });
 
     this.pipeline = this.device.createRenderPipeline({
       vertex: vertexState,
@@ -124,7 +173,7 @@ class Renderer
       primitive: {
         topology: 'triangle-list'
       },
-      layout: "auto"
+      layout: pipelineLayout,
     });
 
   }
@@ -148,6 +197,8 @@ class Renderer
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setVertexBuffer(0, this.positionBuffer);
     passEncoder.setVertexBuffer(1, this.colorsBuffer);
+    passEncoder.setVertexBuffer(2, this.texCoordsBuffer);
+    passEncoder.setBindGroup(0, this.textureBindGroup);
     passEncoder.draw(6);
     passEncoder.end();
 
